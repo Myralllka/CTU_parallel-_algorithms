@@ -1,1 +1,0 @@
-/usr/bin/g++  -Ofast -std=c++17 -march=native -g CMakeFiles/HeatDiffusion.dir/src/HeatDiffusion.cpp.o -o HeatDiffusion  -Wl,-rpath,/usr/lib/openmpi /usr/lib/openmpi/libmpi_cxx.so /usr/lib/openmpi/libmpi.so -Wl,-rpath -Wl,/usr/lib64 -Wl,-rpath -Wl,/usr/lib/openmpi -Wl,--enable-new-dtags -L/usr/lib -pthread 

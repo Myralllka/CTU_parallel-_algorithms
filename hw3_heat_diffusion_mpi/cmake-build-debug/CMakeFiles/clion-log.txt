@@ -1,7 +1,0 @@
-/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/usr/bin/make -DCMAKE_DEPENDS_USE_COMPILER=FALSE -G "CodeBlocks - Unix Makefiles" /home/myralllka/Documents/CTU_parallel_algorithms/hw3_heat_diffusion_mpi
--- Found MPI_C: /usr/lib/openmpi/libmpi.so (found version "3.1") 
--- Found MPI_CXX: /usr/lib/openmpi/libmpi_cxx.so (found version "3.1") 
--- Found MPI: TRUE (found version "3.1")  
--- Configuring done
--- Generating done
--- Build files have been written to: /home/myralllka/Documents/CTU_parallel_algorithms/hw3_heat_diffusion_mpi/cmake-build-debug
