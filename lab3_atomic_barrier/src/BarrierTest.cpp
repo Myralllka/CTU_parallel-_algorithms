@@ -1,15 +1,12 @@
 #include <iostream>
 #include <vector>
 #include <thread>
-#include <condition_variable>
 
 #include "Barrier.hpp"
 
 void barrier_waiting(size_t num_iterations, BarrierCV &barrier) {
     for (size_t i = 0; i < num_iterations; ++i) {}
     barrier.wait();
-//    std::cout << "waiting" << std::endl;
-//    std::cout << "done" << std::endl;
 }
 
 int main() {
@@ -30,7 +27,6 @@ int main() {
         for (auto &worker: workers) {
             worker.join();
         }
-        std::cout << i << std::endl;
     }
 
     return 0;
