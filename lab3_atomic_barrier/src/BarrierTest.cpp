@@ -5,29 +5,32 @@
 
 #include "Barrier.hpp"
 
-void barrierWaiting(size_t numIterations, Barrier &barrier) {
-    for (size_t i = 0; i < numIterations; ++i) {
-        barrier.wait();
-    }
+void barrier_waiting(size_t num_iterations, BarrierCV &barrier) {
+    for (size_t i = 0; i < num_iterations; ++i) {}
+    barrier.wait();
+//    std::cout << "waiting" << std::endl;
+//    std::cout << "done" << std::endl;
 }
 
 int main() {
-    size_t numRepetitions = 5;
-    size_t numIterations = 50;
-    size_t numWorkers = 10;
+    size_t num_repetitions = 2000;
+    size_t num_iterations = 5000000;
+    size_t num_workers = 10;
 
-    Barrier barrier(numWorkers);
+    BarrierCV barrier(num_workers);
 
-    for (size_t i = 0; i < numRepetitions; ++i) {
+    for (size_t i = 0; i < num_repetitions; ++i) {
         std::vector<std::thread> workers;
-        workers.reserve(numWorkers);
-        for (size_t workerIndex = 0; workerIndex < numWorkers; ++workerIndex) {
-            workers.emplace_back(barrierWaiting, numIterations, std::ref(barrier));
+        workers.reserve(num_workers);
+
+        for (size_t worker_index = 0; worker_index < num_workers; ++worker_index) {
+            workers.emplace_back(barrier_waiting, num_iterations, std::ref(barrier));
         }
 
         for (auto &worker: workers) {
             worker.join();
         }
+        std::cout << i << std::endl;
     }
 
     return 0;

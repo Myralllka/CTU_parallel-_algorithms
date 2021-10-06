@@ -6,25 +6,25 @@
 #include <thread>
 #include <atomic>
 
-void incrementCounter(/* TODO: args*/) {
+void increment_counter(std::atomic<size_t> &cntr) {
     for (size_t i = 0; i < 10000000; ++i) {
-        // TODO
+        ++cntr;
     }
 }
 
 int main() {
-    // TODO: create atomic var
+    std::atomic<size_t> counter = 0;
 
     std::vector<std::thread> workers;
-    for (size_t workerIndex = 0; workerIndex < 4; ++workerIndex) {
-        // TODO: create worker
+    for (size_t worker_index = 0; worker_index < 8; ++worker_index) {
+        workers.emplace_back(increment_counter, std::ref(counter));
     }
 
     for (auto &worker: workers) {
         worker.join();
     }
 
-    // TODO: output atomic var
+    std::cout << counter << std::endl;
 
     return 0;
 }
