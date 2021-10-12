@@ -8,8 +8,36 @@
 
 
 void sort_linear(std::vector<ssize_t> &input_vector) {
-    merge_sort(input_vector, 0, input_vector.size() - 1);
+    quick_sort(input_vector, 0, input_vector.size() - 1);
 }
+
+ssize_t partition(std::vector<ssize_t> &values, ssize_t left, ssize_t right) {
+    ssize_t pivot_index = left + (right - left) / 2;
+    ssize_t pivot_value = values[pivot_index];
+    ssize_t i = left, j = right;
+    ssize_t temp;
+    while (i <= j) {
+        while (values[i] < pivot_value) ++i;
+        while (values[j] > pivot_value) --j;
+        if (i <= j) {
+            temp = values[i];
+            values[i] = values[j];
+            values[j] = temp;
+            ++i;
+            --j;
+        }
+    }
+    return i;
+}
+
+void quick_sort(std::vector<ssize_t> &values, ssize_t left, ssize_t right) {
+    if (left < right) {
+        ssize_t pivot_index = partition(values, left, right);
+        quick_sort(values, left, pivot_index - 1);
+        quick_sort(values, pivot_index, right);
+    }
+}
+
 
 void merge_sort(std::vector<ssize_t> &input_vector, ssize_t begin, ssize_t end) {
     if (end < begin) exit(1);

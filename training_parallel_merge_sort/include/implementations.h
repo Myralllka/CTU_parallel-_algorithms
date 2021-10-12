@@ -11,6 +11,8 @@
 
 [[maybe_unused]] void sort_linear(std::vector<ssize_t> &input_vector);
 
+[[maybe_unused]] void quick_sort(std::vector<ssize_t> &input_array, ssize_t begin, ssize_t end);
+
 [[maybe_unused]] void merge_sort(std::vector<ssize_t> &input_vector, ssize_t begin, ssize_t end);
 
 [[maybe_unused]] void merge(std::vector<ssize_t> &input_vector, size_t begin, size_t end);
