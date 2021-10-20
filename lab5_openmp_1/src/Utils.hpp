@@ -23,7 +23,7 @@ public:
 
     [[nodiscard]] std::chrono::milliseconds duration() const {
         auto end = m_running ? std::chrono::steady_clock::now() : m_end;
-        return duration_cast<std::chrono::milliseconds>(end - m_start);
+        return std::chrono::duration_cast<std::chrono::milliseconds>(end - m_start);
     }
 };
 

@@ -14,24 +14,65 @@ double compute_vector_length(const std::vector<double> &u) {
     return sqrt(sum_squares);
 }
 
-std::vector<double> normalization_sequential(std::vector<double> u) {
-    // TODO: work on vector u inplace
-    return u;
+std::vector<double> normalization_sequential(std::vector<double> vector) {
+    auto length = compute_vector_length(vector);
+    for (double &i: vector) {
+        i /= length;
+    }
+    return vector;
 }
 
-std::vector<double> normalization_parallel_sections(std::vector<double> u) {
-    // TODO: work on vector u inplace
-    return u;
+std::vector<double> normalization_parallel_sections(std::vector<double> vector) {
+    auto length = compute_vector_length(vector);
+    size_t mid = vector.size() / 2;
+#pragma omp parallel default(none) shared(vector, length, mid)
+    {
+#pragma omp sections
+        {
+#pragma  omp section
+            {
+                for (size_t i = 0; i < mid; ++i) {
+                    vector[i] /= length;
+                }
+            }
+#pragma  omp section
+            {
+                for (size_t i = mid; i < vector.size(); ++i) {
+                    vector[i] /= length;
+                }
+            }
+        }
+    }
+    return vector;
 }
 
-std::vector<double> normalization_parallel_for_and_critical(std::vector<double> u) {
-    // TODO: work on vector u inplace
-    return u;
+std::vector<double> normalization_parallel_for_and_critical(std::vector<double> vector) {
+    double length = 0;
+
+    for (auto &el: vector) {
+        length += (el * el);
+    }
+    length = sqrt(length);
+
+#pragma omp parallel for default(none) shared(vector) firstprivate(length)
+    for (double &i: vector) {
+        i /= length;
+    }
+    return vector;
 }
 
-std::vector<double> normalization_parallel_for_and_reduction(std::vector<double> u) {
-    // TODO: work on vector u inplace
-    return u;
+std::vector<double> normalization_parallel_for_and_reduction(std::vector<double> vector) {
+    double length = 0;
+#pragma omp parallel for default(none) shared(vector) reduction(+:length)
+    for (auto &el: vector) {
+        length += (el * el);
+    }
+    length = sqrt(length);
+#pragma omp parallel for default(none) shared(vector, length)
+    for (double &i: vector) {
+        i /= length;
+    }
+    return vector;
 }
 
 int main() {
