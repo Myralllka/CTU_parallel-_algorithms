@@ -43,30 +43,43 @@ public:
 
 class LU {
 private:
+//    const size_t m_num_threads = std::thread::hardware_concurrency();
+    const size_t m_num_threads = 2;
+
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
     std::vector<std::vector<double>> m_U;
 
-    std::condition_variable m_cv_parallel;
+    std::vector<size_t> m_threads_indexes;
+
+    std::condition_variable m_cv_parallel_manager;
     std::condition_variable m_cv_update_A;
     std::condition_variable m_cv_decompose;
 
-    std::mutex m_mutex_parallel;
+    std::mutex m_mutex_parallel_manager;
     std::mutex m_mutex_update_A;
     std::mutex m_mutex_decompose;
 
     bool m_end = false;
-    bool ready = false;
+    bool m_start_manager = false;
+    bool m_decompose_continue = false;
+//    bool ready = false;
 
     size_t m_size{};
     size_t m_k{};
 
-    barrier m_barrier_update_A{1};
+    barrier m_barrier_update_A{m_num_threads};
 
 
     friend std::ostream &operator<<(std::ostream &, const LU &);
 
 public:
+    LU() {
+        m_threads_indexes.resize(m_num_threads, 0);
+    };
+
+    ~LU() = default;
+
     void read_matrix_from_input_file(const std::string &input_file) {
         std::ifstream bin(input_file.c_str(), std::ifstream::in | std::ifstream::binary);
         if (bin.fail()) {
@@ -80,6 +93,7 @@ public:
         for (size_t r = 0; r < n; ++r) {
             bin.read((char *) m_A[r].data(), n * sizeof(double));
         }
+        m_size = m_A.size();
     }
 
     void write_results_to_output_file(const std::string &output_file) {
@@ -97,12 +111,8 @@ public:
         }
     }
 
-    void decompose() {
-//        decompose_linear();
-        decompose_parallel();
-    }
-
     [[maybe_unused]] void decompose_linear() {
+        std::cout << "linear" << std::endl;
         for (size_t k = 0; k < m_A.size(); ++k) {
             for (size_t j = k; j < m_A.size(); ++j) {
                 m_U[k][j] = m_A[k][j];
@@ -122,24 +132,16 @@ public:
     }
 
     [[maybe_unused]] void update_A(size_t begin, size_t end) {
-        size_t tmp = 3 + 4;
-        size_t local_k = m_k;
-        size_t local_size = m_size;
         for (size_t i = begin; i < end; ++i) {
-            for (size_t j = local_k + 1; j < local_size; ++j) {
+            for (size_t j = m_k + 1; j < m_size; ++j) {
+                m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
 
-                double x = m_L[i][m_k];
-                double y = m_U[m_k][j];
-                double a = x*y;
-                double b = m_A[i][j] - a;
-                double result = b;
-                m_A[i][j] = result;
             }
         }
     }
 
-    [[maybe_unused]] void decompose_parallel() {
-        m_size = m_A.size();
+    [[maybe_unused]] void decompose_parallel_1() {
+
         for (m_k = 0; m_k < m_size; ++m_k) {
             for (size_t j = m_k; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
@@ -160,6 +162,49 @@ public:
         }
     }
 
+    void decompose() {
+        if (m_A.size() < m_num_threads)
+            decompose_linear();
+        else
+            decompose_parallel_2();
+    }
+
+    [[maybe_unused]] void parallel_update_A() {
+        std::unique_lock<std::mutex> l(m_mutex_update_A, std::defer_lock);
+        while (!m_end) {
+
+        }
+    }
+
+    [[maybe_unused]] void parallel_manager() {
+        std::unique_lock<std::mutex> l(m_mutex_parallel_manager);
+        std::vector<std::thread> vector_of_threads;
+        for () {
+
+        }
+
+    }
+
+    [[maybe_unused]] void decompose_parallel_2() {
+        std::cout << "parallel_2" << std::endl;
+        std::thread t_parallel_manager{&LU::parallel_manager, this};
+        std::unique_lock<std::mutex> l(m_mutex_decompose, std::defer_lock);
+
+        for (m_k = 0; m_k < m_size; ++m_k) {
+
+            for (size_t j = m_k; j < m_size; ++j) {
+                m_U[m_k][j] = m_A[m_k][j];
+            }
+            m_L[m_k][m_k] = 1;
+            for (size_t i = m_k + 1; i < m_size; ++i) {
+                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
+            }
+
+
+        }
+
+        t_parallel_manager.join();
+    }
 //    [[maybe_unused]] void parallel_update_A(size_t begin, size_t end) {
 //        auto size = m_A.size();
 //
