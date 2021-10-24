@@ -14,8 +14,6 @@
 #include <atomic>
 #include <condition_variable>
 
-//#define LINEAR
-
 class barrier {
 private:
     std::mutex m_m;
@@ -49,7 +47,6 @@ private:
 
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
-    std::vector<std::vector<double>> m_L_T;
     std::vector<std::vector<double>> m_U;
 
     std::vector<size_t> m_threads_indexes;
@@ -88,7 +85,7 @@ public:
         size_t n = 0;
         bin.read((char *) &n, sizeof(size_t));
         m_A.resize(n, std::vector<double>(n, 0.0));
-        m_L_T = m_L = m_U = m_A;
+        m_L = m_U = m_A;
         for (size_t r = 0; r < n; ++r) {
             bin.read((char *) m_A[r].data(), n * sizeof(double));
         }
@@ -103,24 +100,13 @@ public:
 
         size_t n = m_A.size();
 
-#ifndef LINEAR
-        for (size_t i = 0; i < m_A.size(); ++i) {
-            for (size_t j = 0; j < m_A.size(); ++j) {
-                m_L_T[i][j] = m_L[j][i];
-            }
-        }
-#endif
-
         for (size_t r = 0; r < n; ++r) {
-#ifdef LINEAR
             bout.write((char *) m_L[r].data(), n * sizeof(double));
-#else
-            bout.write((char *) m_L_T[r].data(), n * sizeof(double));
-#endif
         }
         for (size_t r = 0; r < n; ++r) {
             bout.write((char *) m_U[r].data(), n * sizeof(double));
         }
+
     }
 
     [[maybe_unused]] void decompose_linear() {
@@ -165,24 +151,20 @@ public:
             size_t sz = m_size;
             size_t middle = (m_k + 1 + m_size) / 2;
 //            std::thread t1{&LU::update_A, this, m_k + 1, sz};
-            std::thread t1{&LU::update_A, this, m_k + 1, middle / 4};
-            std::thread t2{&LU::update_A, this, middle / 4, middle / 2};
-            std::thread t3{&LU::update_A, this, middle / 2, middle / 4 * 3};
-            std::thread t4{&LU::update_A, this, middle / 4 * 3, sz};
+            std::thread t1{&LU::update_A, this, m_k + 1, middle / 2};
+            std::thread t2{&LU::update_A, this, middle / 2, sz};
             t1.join();
             t2.join();
-            t3.join();
-            t4.join();
 
         }
     }
 
     void decompose() {
-#ifdef LINEAR
-        decompose_linear();
-#else
-        decompose_parallel_1();
-#endif
+
+//        decompose_linear();
+
+        decompose_parallel_2();
+
     }
 
     [[maybe_unused]] void parallel_update_A(size_t idx) {
@@ -304,27 +286,10 @@ std::ostream &operator<<(std::ostream &out, const LU &lu) {
         }
     };
 
-    std::function<void(const std::vector<std::vector<double>> &)> print_L = [&](
-            const std::vector<std::vector<double>> &M) {
-        size_t n = M.size();
-        for (size_t i = 0; i < n; ++i) {
-            for (size_t j = 0; j < n; ++j) {
-                out << " " << std::setw(10) << M[j][i];
-            }
-            out << std::endl;
-        }
-    };
-
     out << "Matrix A:" << std::endl;
     print_matrix(lu.m_A);
     out << std::endl << "Lower matrix:" << std::endl;
-
-#ifdef LINEAR
     print_matrix(lu.m_L);
-#else
-    print_L(lu.m_L);
-#endif
-
     out << std::endl << "Upper matrix:" << std::endl;
     print_matrix(lu.m_U);
 
@@ -358,11 +323,11 @@ int main(int argc, char *argv[]) {
     std::cout << "Computational time: " << runtime << "s" << std::endl;
 
     // Decomposition is printed only if the output file is not written.
-//    if (output_file.empty()) {
-//        std::cout << lu << std::endl;
-//    } else {
-//        lu.write_results_to_output_file(output_file);
-//    }
+    if (output_file.empty()) {
+        std::cout << lu << std::endl;
+    } else {
+        lu.write_results_to_output_file(output_file);
+    }
 
     return 0;
 }
