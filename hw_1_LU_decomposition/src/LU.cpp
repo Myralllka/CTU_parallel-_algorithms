@@ -14,6 +14,8 @@
 #include <atomic>
 #include <condition_variable>
 
+//#define LINEAR
+
 class barrier {
 private:
     std::mutex m_m;
@@ -47,6 +49,7 @@ private:
 
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
+    std::vector<std::vector<double>> m_L_T;
     std::vector<std::vector<double>> m_U;
 
     std::vector<size_t> m_threads_indexes;
@@ -55,11 +58,11 @@ private:
     std::condition_variable m_cv_decompose;
 
     std::mutex m_mutex_update_A;
-    std::mutex m_mutex_A;
     std::mutex m_mutex_decompose;
 
-    bool m_end = false;
-    bool m_update_A = false;
+    std::atomic<bool> m_end = false;
+    std::atomic<bool> m_update_A = false;
+    std::atomic<bool> m_decompose_A = false;
 
     size_t m_size{};
     size_t m_k{};
@@ -85,7 +88,7 @@ public:
         size_t n = 0;
         bin.read((char *) &n, sizeof(size_t));
         m_A.resize(n, std::vector<double>(n, 0.0));
-        m_L = m_U = m_A;
+        m_L_T = m_L = m_U = m_A;
         for (size_t r = 0; r < n; ++r) {
             bin.read((char *) m_A[r].data(), n * sizeof(double));
         }
@@ -99,8 +102,21 @@ public:
         }
 
         size_t n = m_A.size();
+
+#ifndef LINEAR
+        for (size_t i = 0; i < m_A.size(); ++i) {
+            for (size_t j = 0; j < m_A.size(); ++j) {
+                m_L_T[i][j] = m_L[j][i];
+            }
+        }
+#endif
+
         for (size_t r = 0; r < n; ++r) {
+#ifdef LINEAR
             bout.write((char *) m_L[r].data(), n * sizeof(double));
+#else
+            bout.write((char *) m_L_T[r].data(), n * sizeof(double));
+#endif
         }
         for (size_t r = 0; r < n; ++r) {
             bout.write((char *) m_U[r].data(), n * sizeof(double));
@@ -108,7 +124,6 @@ public:
     }
 
     [[maybe_unused]] void decompose_linear() {
-        std::cout << "linear" << std::endl;
         for (size_t k = 0; k < m_A.size(); ++k) {
             for (size_t j = k; j < m_A.size(); ++j) {
                 m_U[k][j] = m_A[k][j];
@@ -130,7 +145,7 @@ public:
     [[maybe_unused]] void update_A(size_t begin, size_t end) {
         for (size_t i = begin; i < end; ++i) {
             for (size_t j = m_k + 1; j < m_size; ++j) {
-                m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
+                m_A[i][j] = m_A[i][j] - m_L[m_k][i] * m_U[m_k][j];
 
             }
         }
@@ -144,38 +159,44 @@ public:
             }
             m_L[m_k][m_k] = 1;
             for (size_t i = m_k + 1; i < m_size; ++i) {
-                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
+                m_L[m_k][i] = m_A[i][m_k] / m_U[m_k][m_k];
             }
 
             size_t sz = m_size;
             size_t middle = (m_k + 1 + m_size) / 2;
 //            std::thread t1{&LU::update_A, this, m_k + 1, sz};
-            std::thread t1{&LU::update_A, this, m_k + 1, middle / 2};
-            std::thread t2{&LU::update_A, this, middle / 2, sz};
+            std::thread t1{&LU::update_A, this, m_k + 1, middle / 4};
+            std::thread t2{&LU::update_A, this, middle / 4, middle / 2};
+            std::thread t3{&LU::update_A, this, middle / 2, middle / 4 * 3};
+            std::thread t4{&LU::update_A, this, middle / 4 * 3, sz};
             t1.join();
             t2.join();
+            t3.join();
+            t4.join();
 
         }
     }
 
     void decompose() {
-        if (m_A.size() < m_num_threads)
-            decompose_linear();
-        else
-            decompose_parallel_2();
+#ifdef LINEAR
+        decompose_linear();
+#else
+        decompose_parallel_1();
+#endif
     }
 
     [[maybe_unused]] void parallel_update_A(size_t idx) {
         std::unique_lock<std::mutex> l{m_mutex_update_A};
 
         while (true) {
-            m_cv_update_A.wait(l, [this] { return m_update_A; });
+            m_cv_update_A.wait(l, [this] { return m_update_A.load(std::memory_order_acquire); });
+            if (idx != 0) l.unlock();
             m_update_A = false;
             std::cout << "update_a started " << idx << std::endl;
-            if (m_end) {
+            if (m_end.load(std::memory_order_acquire)) {
                 m_cv_decompose.notify_one();
                 break;
-            };
+            }
             if (m_num_threads < idx)
                 break;
 
@@ -192,11 +213,11 @@ public:
             std::cout << "update_a finished " << idx << std::endl;
 
             if (idx == 0) {
-                m_update_A = true;
+                m_decompose_A = true;
                 m_cv_decompose.notify_one();
-            };
+            }
 
-            if (m_end) break;
+            if (m_end.load(std::memory_order_acquire)) break;
         }
 
 
@@ -221,7 +242,6 @@ public:
 
         for (m_k = 0; m_k < m_size; ++m_k) {
 //            std::cout << m_k << std::endl;
-            m_update_A = false;
 
             std::cout << "parallel started" << std::endl;
 
@@ -254,10 +274,13 @@ public:
             ++index_counter;
             m_threads_indexes[index_counter] = m_size - 1;
 
-            m_update_A = true;
             std::cout << "parallel finished" << std::endl;
+
+            m_update_A = true;
             m_cv_update_A.notify_all();
-            m_cv_decompose.wait(l, [this] { return m_update_A; });
+
+            m_cv_decompose.wait(l, [this] { return m_decompose_A.load(std::memory_order_acquire); });
+            m_decompose_A = false;
         }
 
         m_end = true;
@@ -268,6 +291,7 @@ public:
 
 // Print the matrices A, L, and U of an LU class instance.
 std::ostream &operator<<(std::ostream &out, const LU &lu) {
+
     std::function<void(const std::vector<std::vector<double>> &)> print_matrix = [&](
             const std::vector<std::vector<double>> &M) {
 
@@ -280,10 +304,27 @@ std::ostream &operator<<(std::ostream &out, const LU &lu) {
         }
     };
 
+    std::function<void(const std::vector<std::vector<double>> &)> print_L = [&](
+            const std::vector<std::vector<double>> &M) {
+        size_t n = M.size();
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = 0; j < n; ++j) {
+                out << " " << std::setw(10) << M[j][i];
+            }
+            out << std::endl;
+        }
+    };
+
     out << "Matrix A:" << std::endl;
     print_matrix(lu.m_A);
     out << std::endl << "Lower matrix:" << std::endl;
+
+#ifdef LINEAR
     print_matrix(lu.m_L);
+#else
+    print_L(lu.m_L);
+#endif
+
     out << std::endl << "Upper matrix:" << std::endl;
     print_matrix(lu.m_U);
 
