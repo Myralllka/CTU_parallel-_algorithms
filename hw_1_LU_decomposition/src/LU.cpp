@@ -128,6 +128,27 @@ public:
         }
     }
 
+    void decompose() {
+
+//        decompose_linear();
+
+        decompose_parallel_3();
+
+    }
+
+    [[maybe_unused]] void parallel_update_A_3(size_t idx) {
+
+    }
+
+    [[maybe_unused]] void parallel_manager_3() {
+
+    }
+
+    [[maybe_unused]] void decompose_parallel_3() {
+
+    }
+
+    // right fucntion used in decompose_parallel_1
     [[maybe_unused]] void update_A(size_t begin, size_t end) {
         for (size_t i = begin; i < end; ++i) {
             for (size_t j = m_k + 1; j < m_size; ++j) {
@@ -137,6 +158,7 @@ public:
         }
     }
 
+    // Wrong function
     [[maybe_unused]] void decompose_parallel_1() {
 
         for (m_k = 0; m_k < m_size; ++m_k) {
@@ -159,14 +181,7 @@ public:
         }
     }
 
-    void decompose() {
-
-//        decompose_linear();
-
-        decompose_parallel_2();
-
-    }
-
+    // Wrong function
     [[maybe_unused]] void parallel_update_A(size_t idx) {
         std::unique_lock<std::mutex> l{m_mutex_update_A};
 
@@ -205,6 +220,7 @@ public:
 
     }
 
+    // Wrong function
     [[maybe_unused]] void parallel_manager() {
         std::vector<std::thread> vector_of_threads;
         for (size_t i = 0; i < m_num_threads; ++i) {
@@ -216,6 +232,7 @@ public:
 
     }
 
+    // Wrong function
     [[maybe_unused]] void decompose_parallel_2() {
         std::cout << "parallel_2" << std::endl;
         std::thread t_parallel_manager{&LU::parallel_manager, this};
