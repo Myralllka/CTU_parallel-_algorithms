@@ -1,0 +1,13 @@
+Computational time: 0.00130049s
+Matrix A:
+    9.68072          0
+    3.33317    4.65287
+
+Lower matrix:
+          1          0
+    0.34431          1
+
+Upper matrix:
+    9.68072    3.28843
+          0    4.65287
+

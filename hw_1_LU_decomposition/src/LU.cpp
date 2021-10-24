@@ -55,11 +55,11 @@ private:
     std::mutex m_mutex_update_A;
     std::mutex m_mutex_decompose;
 
-    std::atomic<bool> m_end = false;
-    std::atomic<bool> ready = false;
+    bool m_end = false;
+    bool ready = false;
 
-    std::atomic<size_t> m_size{};
-    std::atomic<size_t> m_k{};
+    size_t m_size{};
+    size_t m_k{};
 
     barrier m_barrier_update_A{1};
 
@@ -98,6 +98,7 @@ public:
     }
 
     void decompose() {
+//        decompose_linear();
         decompose_parallel();
     }
 
@@ -120,31 +121,42 @@ public:
         }
     }
 
-    [[maybe_unused]] void update_A() {
+    [[maybe_unused]] void update_A(size_t begin, size_t end) {
+        size_t tmp = 3 + 4;
+        size_t local_k = m_k;
+        size_t local_size = m_size;
         for (size_t i = begin; i < end; ++i) {
-            for (size_t j = 0; j < size; ++j) {
-                m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
+            for (size_t j = local_k + 1; j < local_size; ++j) {
+
+                double x = m_L[i][m_k];
+                double y = m_U[m_k][j];
+                double a = x*y;
+                double b = m_A[i][j] - a;
+                double result = b;
+                m_A[i][j] = result;
             }
         }
-
     }
 
     [[maybe_unused]] void decompose_parallel() {
-        for (size_t k = 0; k < m_A.size(); ++k) {
-            for (size_t j = k; j < m_A.size(); ++j) {
-                m_U[k][j] = m_A[k][j];
+        m_size = m_A.size();
+        for (m_k = 0; m_k < m_size; ++m_k) {
+            for (size_t j = m_k; j < m_size; ++j) {
+                m_U[m_k][j] = m_A[m_k][j];
             }
-            m_L[k][k] = 1;
-            for (size_t i = k + 1; i < m_A.size(); ++i) {
-                m_L[i][k] = m_A[i][k] / m_U[k][k];
+            m_L[m_k][m_k] = 1;
+            for (size_t i = m_k + 1; i < m_size; ++i) {
+                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
             }
 
-            for (size_t i = k + 1; i < m_A.size(); ++i) {
-                for (size_t j = k + 1; j < m_A.size(); ++j) {
-                    auto result = m_A[i][j] - m_L[i][k] * m_U[k][j];
-                    m_A[i][j] = result;
-                }
-            }
+            size_t sz = m_size;
+            size_t middle = (m_k + 1 + m_size) / 2;
+//            std::thread t1{&LU::update_A, this, m_k + 1, sz};
+            std::thread t1{&LU::update_A, this, m_k + 1, middle / 2};
+            std::thread t2{&LU::update_A, this, middle / 2, sz};
+            t1.join();
+            t2.join();
+
         }
     }
 
@@ -276,11 +288,11 @@ int main(int argc, char *argv[]) {
     std::cout << "Computational time: " << runtime << "s" << std::endl;
 
     // Decomposition is printed only if the output file is not written.
-    if (output_file.empty()) {
-        std::cout << lu << std::endl;
-    } else {
-        lu.write_results_to_output_file(output_file);
-    }
+//    if (output_file.empty()) {
+//        std::cout << lu << std::endl;
+//    } else {
+//        lu.write_results_to_output_file(output_file);
+//    }
 
     return 0;
 }
