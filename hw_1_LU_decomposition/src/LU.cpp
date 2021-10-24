@@ -43,8 +43,7 @@ public:
 
 class LU {
 private:
-//    const size_t m_num_threads = std::thread::hardware_concurrency();
-    const size_t m_num_threads = 2;
+    size_t m_num_threads = 1;
 
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
@@ -52,18 +51,15 @@ private:
 
     std::vector<size_t> m_threads_indexes;
 
-    std::condition_variable m_cv_parallel_manager;
     std::condition_variable m_cv_update_A;
     std::condition_variable m_cv_decompose;
 
-    std::mutex m_mutex_parallel_manager;
     std::mutex m_mutex_update_A;
+    std::mutex m_mutex_A;
     std::mutex m_mutex_decompose;
 
     bool m_end = false;
-    bool m_start_manager = false;
-    bool m_decompose_continue = false;
-//    bool ready = false;
+    bool m_update_A = false;
 
     size_t m_size{};
     size_t m_k{};
@@ -75,7 +71,7 @@ private:
 
 public:
     LU() {
-        m_threads_indexes.resize(m_num_threads, 0);
+        m_threads_indexes.resize(m_num_threads * 2, 0);
     };
 
     ~LU() = default;
@@ -169,18 +165,50 @@ public:
             decompose_parallel_2();
     }
 
-    [[maybe_unused]] void parallel_update_A() {
-        std::unique_lock<std::mutex> l(m_mutex_update_A, std::defer_lock);
-        while (!m_end) {
+    [[maybe_unused]] void parallel_update_A(size_t idx) {
+        std::unique_lock<std::mutex> l{m_mutex_update_A};
 
+        while (true) {
+            m_cv_update_A.wait(l, [this] { return m_update_A; });
+            m_update_A = false;
+            std::cout << "update_a started " << idx << std::endl;
+            if (m_end) {
+                m_cv_decompose.notify_one();
+                break;
+            };
+            if (m_num_threads < idx)
+                break;
+
+            auto begin = m_threads_indexes[idx];
+            auto end = m_threads_indexes[idx + 1];
+
+            for (size_t i = begin; i < end; ++i) {
+                for (size_t j = 0; j < m_size; ++j) {
+                    m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
+                }
+            }
+
+            m_barrier_update_A.wait();
+            std::cout << "update_a finished " << idx << std::endl;
+
+            if (idx == 0) {
+                m_update_A = true;
+                m_cv_decompose.notify_one();
+            };
+
+            if (m_end) break;
         }
+
+
     }
 
     [[maybe_unused]] void parallel_manager() {
-        std::unique_lock<std::mutex> l(m_mutex_parallel_manager);
         std::vector<std::thread> vector_of_threads;
-        for () {
-
+        for (size_t i = 0; i < m_num_threads; ++i) {
+            vector_of_threads.emplace_back(&LU::parallel_update_A, this, i);
+        }
+        for (auto &t: vector_of_threads) {
+            t.join();
         }
 
     }
@@ -188,9 +216,14 @@ public:
     [[maybe_unused]] void decompose_parallel_2() {
         std::cout << "parallel_2" << std::endl;
         std::thread t_parallel_manager{&LU::parallel_manager, this};
-        std::unique_lock<std::mutex> l(m_mutex_decompose, std::defer_lock);
+        size_t index_counter, counter, begin_counter, end_counter;
+        std::unique_lock<std::mutex> l(m_mutex_decompose);
 
         for (m_k = 0; m_k < m_size; ++m_k) {
+//            std::cout << m_k << std::endl;
+            m_update_A = false;
+
+            std::cout << "parallel started" << std::endl;
 
             for (size_t j = m_k; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
@@ -199,87 +232,38 @@ public:
             for (size_t i = m_k + 1; i < m_size; ++i) {
                 m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
             }
+//            std::cout << m_k << std::endl;
+            auto tmp_size = (m_size - (m_k + 1));
+            m_num_threads = std::max(std::min(m_num_threads, tmp_size / 2 - 1), static_cast<size_t>(1));
+            auto step = tmp_size / m_num_threads;
 
+            index_counter = 0;
+            counter = 0;
+            begin_counter = m_k + 1;
+            end_counter = m_k + 1 + step;
 
+            for (; counter < m_num_threads - 1; ++counter) {
+                m_threads_indexes[index_counter++] = begin_counter;
+
+                m_threads_indexes[index_counter++] = end_counter;
+                begin_counter += step + 1;
+                end_counter += step + 1;
+            }
+
+            m_threads_indexes[index_counter] = begin_counter;
+            ++index_counter;
+            m_threads_indexes[index_counter] = m_size - 1;
+
+            m_update_A = true;
+            std::cout << "parallel finished" << std::endl;
+            m_cv_update_A.notify_all();
+            m_cv_decompose.wait(l, [this] { return m_update_A; });
         }
 
+        m_end = true;
+        m_cv_update_A.notify_all();
         t_parallel_manager.join();
     }
-//    [[maybe_unused]] void parallel_update_A(size_t begin, size_t end) {
-//        auto size = m_A.size();
-//
-//        std::unique_lock<std::mutex> l(m_mutex_update_A, std::defer_lock);
-//
-//        while (true) {
-//            l.lock();
-//            m_cv_update_A.wait(l, []{return true;});
-//            l.unlock();
-//            if (m_end) break;
-//
-//            for (size_t i = begin; i < end; ++i) {
-//                for (size_t j = 0; j < size; ++j) {
-//                    m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
-//                }
-//            }
-//        }
-//
-//        m_barrier_update_A.wait();
-//
-//        m_cv_decompose.notify_all();
-//
-//        std::cout << "parallel_update_A ends" << std::endl;
-//
-//    }
-
-//    [[maybe_unused]] void parallel_manager() {
-//        std::unique_lock<std::mutex> l(m_mutex_parallel, std::defer_lock);
-//        size_t size = m_size;
-//
-//        std::thread t1{&LU::parallel_update_A, this, 0, size};
-////        std::thread t2{&LU::parallel_update_A, this, size / 2, size, k};
-//
-//
-//        while (true) {
-//            l.lock();
-//
-//            m_cv_parallel.wait(l, [] { return true; });
-//
-//            m_cv_update_A.notify_all();
-//
-//            l.unlock();
-//            if (m_end) break;
-//        }
-//
-//        t1.join();
-//        std::cout << "parallel_manager ends" << std::endl;
-////        t2.join();
-//    }
-
-//    [[maybe_unused]] void decompose_parallel() {
-//        m_size = m_A.size();
-//        std::unique_lock<std::mutex> l(m_mutex_decompose, std::defer_lock);
-//
-//        std::thread manager(&LU::parallel_manager, this);
-//
-//        for (m_k = 0; m_k < m_size; ++m_k) {
-//
-//            for (size_t j = m_k; j < m_size; ++j) {
-//                m_U[m_k][j] = m_A[m_k][j];
-//            }
-//
-//            m_L[m_k][m_k] = 1;
-//            for (size_t i = m_k + 1; i < m_size; ++i) {
-//                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
-//            }
-//
-//            m_cv_parallel.notify_all();
-//            l.lock();
-//            m_cv_decompose.wait(l, []{return true;});
-//            l.unlock();
-//        }
-//        m_end = true;
-//        manager.join();
-//    }
 };
 
 // Print the matrices A, L, and U of an LU class instance.
