@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Options
 set(WARNINGS_AS_ERRORS ON)
-set(ENABLE_PVS_STUDIO ON)
+set(ENABLE_PVS_STUDIO OFF)
 #! ENABLE_SANITIZERS is the option for the test builds!
 #  Definitely enable it while developing.
 #  Disable it for the production builds and before submitting for grading!
@@ -27,7 +27,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin)
 include_directories(include)
 
 # Project source compilation
-add_executable(${PROJECT_NAME} src/LU.cpp)
+add_executable(${PROJECT_NAME} src/LU.cpp src/main.c include/LU.h)
+
+
+#if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+#	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast -march=native")
+#endif()
+
+add_executable(InstanceGenerator src/InstanceGenerator.cpp)
+target_link_libraries(InstanceGenerator ${CMAKE_THREAD_LIBS_INIT} )
 
 #
 find_package(Threads)
