@@ -13,6 +13,8 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <cassert>
+
 
 class barrier {
 private:
@@ -34,6 +36,7 @@ public:
         m_cv.notify_one();
         --waiting;
         if (waiting == 0) {
+            std::cout << "[barrier] done" << std::endl;
             //reset barrier
             counter = 0;
         }
@@ -58,20 +61,20 @@ private:
     std::mutex m_mutex_decompose;
 
     std::atomic<bool> m_end = false;
-    std::atomic<bool> m_update_A = false;
+    std::atomic<bool> m_update_A = true;
     std::atomic<bool> m_decompose_A = false;
 
     size_t m_size{};
     size_t m_k{};
 
-    barrier m_barrier_update_A{m_num_threads};
+    barrier m_barrier_update_A{m_num_threads + 1};
 
 
     friend std::ostream &operator<<(std::ostream &, const LU &);
 
 public:
     LU() {
-        m_threads_indexes.resize(m_num_threads * 2, 0);
+        m_threads_indexes.resize(m_num_threads + 1, 0);
     };
 
     ~LU() = default;
@@ -110,50 +113,103 @@ public:
     }
 
     [[maybe_unused]] void decompose_linear() {
-        for (size_t k = 0; k < m_A.size(); ++k) {
-            for (size_t j = k; j < m_A.size(); ++j) {
-                m_U[k][j] = m_A[k][j];
+        for (m_k = 0; m_k < m_size; ++m_k) {
+            for (size_t j = m_k; j < m_size; ++j) {
+                m_U[m_k][j] = m_A[m_k][j];
             }
-            m_L[k][k] = 1;
-            for (size_t i = k + 1; i < m_A.size(); ++i) {
-                m_L[i][k] = m_A[i][k] / m_U[k][k];
+            m_L[m_k][m_k] = 1;
+            for (size_t i = m_k + 1; i < m_size; ++i) {
+                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
             }
 
-            for (size_t i = k + 1; i < m_A.size(); ++i) {
-                for (size_t j = k + 1; j < m_A.size(); ++j) {
-                    auto result = m_A[i][j] - m_L[i][k] * m_U[k][j];
-                    m_A[i][j] = result;
+            for (size_t i = m_k + 1; i < m_size; ++i) {
+                for (size_t j = m_k + 1; j < m_size; ++j) {
+                    m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
                 }
             }
         }
     }
 
     void decompose() {
-
-//        decompose_linear();
-
-        decompose_parallel_3();
-
+        if (m_num_threads * 2 >= m_A.size()) {
+            decompose_linear();
+        } else {
+            decompose_parallel_3();
+        }
     }
 
     [[maybe_unused]] void parallel_update_A_3(size_t idx) {
+        m_threads_indexes[m_num_threads] = m_size;
+        std::mutex local_mutex;
+        std::unique_lock<std::mutex> l(local_mutex);
 
-    }
+        for (size_t cnt = 0; cnt < m_size; ++cnt) {
+            m_cv_update_A.wait(l, [&] { return m_k == cnt; });
 
-    [[maybe_unused]] void parallel_manager_3() {
+            std::cout << "thread started" << cnt << std::endl;
 
+            auto begin = m_threads_indexes[idx];
+            auto end = m_threads_indexes[idx + 1];
+
+            for (size_t i = begin; i < end; ++i) {
+                for (size_t j = 0; j < m_size; ++j) {
+                    m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
+                }
+            }
+
+            std::cout << "thread barrier" << cnt << std::endl;
+            m_barrier_update_A.wait();
+        }
+        std::cout << "thread closed" << std::endl;
     }
 
     [[maybe_unused]] void decompose_parallel_3() {
+        std::vector<std::thread> vector_of_threads;
 
+        for (size_t i = 0; i < m_num_threads; ++i) {
+            vector_of_threads.emplace_back(&LU::parallel_update_A_3, this, i);
+        }
+
+        for (m_k = 0; m_k < m_size; ++m_k) {
+            std::cout << "decompose started" << m_k << std::endl;
+            for (size_t j = m_k; j < m_size; ++j) {
+                m_U[m_k][j] = m_A[m_k][j];
+            }
+            m_L[m_k][m_k] = 1;
+            for (size_t i = m_k + 1; i < m_size; ++i) {
+                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
+            }
+            {
+//                auto tmp_size = (m_size - (m_k + 1));
+                size_t tmp_size = (m_k + 1 + m_size) / m_num_threads;
+                auto step = tmp_size / m_num_threads;
+
+                for (size_t counter = 0; counter < m_num_threads; ++counter) {
+                    m_threads_indexes[counter] = m_k + 1 + counter * step;
+                }
+
+                std::cout << "decompose call thread" << m_k << std::endl;
+                m_cv_update_A.notify_all();
+
+                std::cout << "decompose barrier" << m_k << std::endl;
+                m_barrier_update_A.wait();
+
+                std::cout << "decompose finished" << m_k << std::endl;
+            }
+        }
+//        m_barrier_update_A.wait();
+
+        for (auto &t: vector_of_threads) {
+            std::cout << ".";
+            t.join();
+        }
     }
 
-    // right fucntion used in decompose_parallel_1
+    // right function used in decompose_parallel_1
     [[maybe_unused]] void update_A(size_t begin, size_t end) {
         for (size_t i = begin; i < end; ++i) {
             for (size_t j = m_k + 1; j < m_size; ++j) {
-                m_A[i][j] = m_A[i][j] - m_L[m_k][i] * m_U[m_k][j];
-
+                m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
             }
         }
     }
@@ -167,7 +223,7 @@ public:
             }
             m_L[m_k][m_k] = 1;
             for (size_t i = m_k + 1; i < m_size; ++i) {
-                m_L[m_k][i] = m_A[i][m_k] / m_U[m_k][m_k];
+                m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
             }
 
             size_t sz = m_size;

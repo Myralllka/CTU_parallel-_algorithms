@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Options
 set(WARNINGS_AS_ERRORS ON)
-set(ENABLE_PVS_STUDIO OFF)
+set(ENABLE_PVS_STUDIO ON)
 #! ENABLE_SANITIZERS is the option for the test builds!
 #  Definitely enable it while developing.
 #  Disable it for the production builds and before submitting for grading!
