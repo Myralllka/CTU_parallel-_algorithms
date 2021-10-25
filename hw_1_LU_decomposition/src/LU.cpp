@@ -36,8 +36,9 @@ public:
         m_cv.notify_one();
         --waiting;
         if (waiting == 0) {
+#ifdef DEBUG
             std::cout << "[barrier] done" << std::endl;
-            //reset barrier
+#endif
             counter = 0;
         }
         lk.unlock();
@@ -46,13 +47,15 @@ public:
 
 class LU {
 private:
-    size_t m_num_threads = 1;
+    size_t m_num_threads = 4;
+//    size_t m_num_threads = std::thread::hardware_concurrency();
 
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
     std::vector<std::vector<double>> m_U;
 
     std::vector<size_t> m_threads_indexes;
+//    std::vector<std::mutex> m_threads_mur;
 
     std::condition_variable m_cv_update_A;
     std::condition_variable m_cv_decompose;
@@ -68,12 +71,14 @@ private:
     size_t m_k{};
 
     barrier m_barrier_update_A{m_num_threads + 1};
+    barrier m_barrier_update_ready_A{m_num_threads + 1};
 
 
     friend std::ostream &operator<<(std::ostream &, const LU &);
 
 public:
     LU() {
+        m_threads_indexes.resize(m_num_threads + 1, 0);
         m_threads_indexes.resize(m_num_threads + 1, 0);
     };
 
@@ -139,15 +144,11 @@ public:
     }
 
     [[maybe_unused]] void parallel_update_A_3(size_t idx) {
-        m_threads_indexes[m_num_threads] = m_size;
-        std::mutex local_mutex;
-        std::unique_lock<std::mutex> l(local_mutex);
-
         for (size_t cnt = 0; cnt < m_size; ++cnt) {
-            m_cv_update_A.wait(l, [&] { return m_k == cnt; });
-
-            std::cout << "thread started" << cnt << std::endl;
-
+            m_barrier_update_ready_A.wait();
+#ifdef DEBUG
+            std::cout << "thread started " << idx << " | " << cnt << std::endl;
+#endif
             auto begin = m_threads_indexes[idx];
             auto end = m_threads_indexes[idx + 1];
 
@@ -156,14 +157,18 @@ public:
                     m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
                 }
             }
-
-            std::cout << "thread barrier" << cnt << std::endl;
+#ifdef DEBUG
+            std::cout << "thread barrier " << idx << " | " << cnt << std::endl;
+#endif
             m_barrier_update_A.wait();
         }
-        std::cout << "thread closed" << std::endl;
+#ifdef DEBUG
+        std::cout << "thread closed " << idx << std::endl;
+#endif
     }
 
     [[maybe_unused]] void decompose_parallel_3() {
+        m_threads_indexes[m_num_threads] = m_size;
         std::vector<std::thread> vector_of_threads;
 
         for (size_t i = 0; i < m_num_threads; ++i) {
@@ -171,7 +176,9 @@ public:
         }
 
         for (m_k = 0; m_k < m_size; ++m_k) {
+#ifdef DEBUG
             std::cout << "decompose started" << m_k << std::endl;
+#endif
             for (size_t j = m_k; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
             }
@@ -180,27 +187,31 @@ public:
                 m_L[i][m_k] = m_A[i][m_k] / m_U[m_k][m_k];
             }
             {
-//                auto tmp_size = (m_size - (m_k + 1));
-                size_t tmp_size = (m_k + 1 + m_size) / m_num_threads;
-                auto step = tmp_size / m_num_threads;
+                auto tmp_size = (m_size - (m_k + 1));
+//                size_t tmp_size = (m_size);
+                auto step = tmp_size / (m_num_threads);
 
                 for (size_t counter = 0; counter < m_num_threads; ++counter) {
                     m_threads_indexes[counter] = m_k + 1 + counter * step;
                 }
-
+#ifdef DEBUG
                 std::cout << "decompose call thread" << m_k << std::endl;
-                m_cv_update_A.notify_all();
-
+#endif
+                m_barrier_update_ready_A.wait();
+#ifdef DEBUG
                 std::cout << "decompose barrier" << m_k << std::endl;
+#endif
                 m_barrier_update_A.wait();
-
+#ifdef DEBUG
                 std::cout << "decompose finished" << m_k << std::endl;
+#endif
             }
         }
-//        m_barrier_update_A.wait();
 
         for (auto &t: vector_of_threads) {
+#ifdef DEBUG
             std::cout << ".";
+#endif
             t.join();
         }
     }
@@ -245,7 +256,9 @@ public:
             m_cv_update_A.wait(l, [this] { return m_update_A.load(std::memory_order_acquire); });
             if (idx != 0) l.unlock();
             m_update_A = false;
+#ifdef DEBUG
             std::cout << "update_a started " << idx << std::endl;
+#endif
             if (m_end.load(std::memory_order_acquire)) {
                 m_cv_decompose.notify_one();
                 break;
@@ -263,7 +276,9 @@ public:
             }
 
             m_barrier_update_A.wait();
+#ifdef DEBUG
             std::cout << "update_a finished " << idx << std::endl;
+#endif
 
             if (idx == 0) {
                 m_decompose_A = true;
@@ -385,8 +400,6 @@ int main(int argc, char *argv[]) {
 
     LU lu;
     lu.read_matrix_from_input_file(input_file);
-//    FOR DEBUGGING
-//    std::cout << lu << std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
     lu.decompose();
@@ -396,11 +409,11 @@ int main(int argc, char *argv[]) {
     std::cout << "Computational time: " << runtime << "s" << std::endl;
 
     // Decomposition is printed only if the output file is not written.
-    if (output_file.empty()) {
-        std::cout << lu << std::endl;
-    } else {
-        lu.write_results_to_output_file(output_file);
-    }
+//    if (output_file.empty()) {
+//        std::cout << lu << std::endl;
+//    } else {
+//        lu.write_results_to_output_file(output_file);
+//    }
 
     return 0;
 }
