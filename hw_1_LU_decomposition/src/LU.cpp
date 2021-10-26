@@ -11,7 +11,6 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-//#define DEBUG
 
 
 class barrier {
@@ -34,9 +33,6 @@ public:
         m_cv.notify_one();
         --waiting;
         if (waiting == 0) {
-#ifdef DEBUG
-            std::cout << "[barrier] done" << std::endl;
-#endif
             counter = 0;
         }
         lk.unlock();
@@ -49,6 +45,7 @@ private:
     size_t m_num_threads = std::thread::hardware_concurrency();
 
     std::vector<std::vector<double>> m_A;
+    std::vector<std::vector<double>> m_A_second;
     std::vector<std::vector<double>> m_L;
     std::vector<std::vector<double>> m_U;
     std::vector<std::vector<double>> m_L_T;
@@ -57,15 +54,16 @@ private:
     size_t m_size{};
     size_t m_k{};
 
-    barrier m_barrier_update_A{m_num_threads + 1};
-    barrier m_barrier_update_ready_A{m_num_threads + 1};
+    bool is_m_A_second = false;
+
+    barrier m_barrier_update_A{m_num_threads};
+    barrier m_barrier_update_ready_A{m_num_threads};
 
 
     friend std::ostream &operator<<(std::ostream &, const LU &);
 
 public:
     LU() {
-        m_threads_indexes.resize(m_num_threads + 1, 0);
         m_threads_indexes.resize(m_num_threads + 1, 0);
     };
 
@@ -80,7 +78,7 @@ public:
         size_t n = 0;
         bin.read((char *) &n, sizeof(size_t));
         m_A.resize(n, std::vector<double>(n, 0.0));
-        m_L_T = m_L = m_U = m_A;
+        m_A_second = m_L_T = m_L = m_U = m_A;
         for (size_t r = 0; r < n; ++r) {
             bin.read((char *) m_A[r].data(), n * sizeof(double));
         }
@@ -114,10 +112,6 @@ public:
                 m_U[m_k][j] = m_A[m_k][j];
                 m_L[m_k][j] = m_A[j][m_k] / m_U[m_k][m_k];
             }
-//            m_L[m_k][m_k] = 1;
-//            for (size_t i = m_k + 1; i < m_size; ++i) {
-//                m_L[m_k][i] = m_A[i][m_k] / m_U[m_k][m_k];
-//            }
 
             for (size_t i = m_k + 1; i < m_size; ++i) {
                 for (size_t j = m_k + 1; j < m_size; ++j) {
@@ -129,7 +123,7 @@ public:
     }
 
     void decompose() {
-        if (m_num_threads * 2 >= m_A.size()) {
+        if (m_num_threads >= m_A.size()) {
             decompose_linear();
         } else {
             decompose_parallel();
@@ -145,53 +139,51 @@ public:
                     m_A[i][j] -= m_L[m_k][i] * m_U[m_k][j];
                 }
             }
+
             m_barrier_update_A.wait();
         }
     }
 
     [[maybe_unused]] void decompose_parallel() {
         m_threads_indexes[m_num_threads] = m_size;
+
         std::vector<std::thread> vector_of_threads;
 
-        for (size_t i = 0; i < m_num_threads; ++i) {
+        double m_U_m_k;
+        size_t tmp_size, step;
+        for (size_t i = 0; i < m_num_threads - 1; ++i) {
             vector_of_threads.emplace_back(&LU::parallel_update_A, this, i);
         }
 
         for (m_k = 0; m_k < m_size; ++m_k) {
-#ifdef DEBUG
-            std::cout << "decompose started" << m_k << std::endl;
-#endif
-            m_U[m_k][m_k] = m_A[m_k][m_k];
+            m_U_m_k = m_A[m_k][m_k];
+            m_U[m_k][m_k] = m_U_m_k;
             m_L[m_k][m_k] = 1;
             for (size_t j = m_k + 1; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
                 m_L[m_k][j] = m_A[j][m_k] / m_U[m_k][m_k];
             }
-//            for (size_t j = m_k; j < m_size; ++j) {
-//                m_U[m_k][j] = m_A[m_k][j];
-//            }
-//
-//            m_L[m_k][m_k] = 1;
-//            for (size_t i = m_k + 1; i < m_size; ++i) {
-//                m_L[m_k][i] = m_A[i][m_k] / m_U[m_k][m_k];
-//            }
 
             {
-                auto tmp_size = (m_size - (m_k + 1));
-                auto step = tmp_size / (m_num_threads);
+                tmp_size = (m_size - (m_k + 1));
+                step = tmp_size / (m_num_threads + 1);
 
                 for (size_t counter = 0; counter < m_num_threads; ++counter) {
                     m_threads_indexes[counter] = m_k + 1 + counter * step;
                 }
                 m_barrier_update_ready_A.wait();
+
+                for (size_t i = m_threads_indexes.end()[-2]; i < m_threads_indexes.end()[-1]; ++i) {
+                    for (size_t j = 0; j < m_size; ++j) {
+                        m_A[i][j] -= m_L[m_k][i] * m_U[m_k][j];
+                    }
+                }
+
                 m_barrier_update_A.wait();
             }
         }
 
         for (auto &t: vector_of_threads) {
-#ifdef DEBUG
-            std::cout << ".";
-#endif
             t.join();
         }
     }
