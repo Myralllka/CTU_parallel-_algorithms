@@ -29,6 +29,8 @@ include_directories(include)
 # Project source compilation
 add_executable(${PROJECT_NAME} src/LU.cpp src/main.c include/LU.h)
 
+add_executable(read_bin_mat src/read_bin_matrix.cpp)
+
 
 #if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast -march=native")

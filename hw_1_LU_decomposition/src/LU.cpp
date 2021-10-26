@@ -13,7 +13,7 @@
 #include <condition_variable>
 //#define DEBUG
 //#define LINEAR
-//#define TRANSPOSE_L
+#define TRANSPOSE_L
 
 
 class barrier {
@@ -102,7 +102,7 @@ public:
         }
 #ifdef TRANSPOSE_L
         for (size_t i = 0; i < m_size; ++i) {
-            for (size_t j = 0; i < m_size; ++j) {
+            for (size_t j = 0; j < m_size; ++j) {
                 m_L_T[i][j] = m_L[j][i];
             }
         }
