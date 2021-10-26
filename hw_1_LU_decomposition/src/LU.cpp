@@ -161,14 +161,20 @@ public:
 #ifdef DEBUG
             std::cout << "decompose started" << m_k << std::endl;
 #endif
-            for (size_t j = m_k; j < m_size; ++j) {
-                m_U[m_k][j] = m_A[m_k][j];
-            }
-
+            m_U[m_k][m_k] = m_A[m_k][m_k];
             m_L[m_k][m_k] = 1;
-            for (size_t i = m_k + 1; i < m_size; ++i) {
-                m_L[m_k][i] = m_A[i][m_k] / m_U[m_k][m_k];
+            for (size_t j = m_k + 1; j < m_size; ++j) {
+                m_U[m_k][j] = m_A[m_k][j];
+                m_L[m_k][j] = m_A[j][m_k] / m_U[m_k][m_k];
             }
+//            for (size_t j = m_k; j < m_size; ++j) {
+//                m_U[m_k][j] = m_A[m_k][j];
+//            }
+//
+//            m_L[m_k][m_k] = 1;
+//            for (size_t i = m_k + 1; i < m_size; ++i) {
+//                m_L[m_k][i] = m_A[i][m_k] / m_U[m_k][m_k];
+//            }
 
             {
                 auto tmp_size = (m_size - (m_k + 1));
