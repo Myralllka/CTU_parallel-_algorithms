@@ -4,23 +4,21 @@
 
 #include "Utils.hpp"
 
-using namespace std;
-
 double with_false_sharing(int num_iterations) {
     double x = 0.0;
     double y = 0.0;
-    #pragma omp parallel num_threads(2)
+#pragma omp parallel num_threads(2) default(none) shared(x, y, num_iterations)
     {
-        #pragma omp sections
+#pragma omp sections
         {
-            #pragma omp section
+#pragma omp section
             {
                 for (int i = 0; i < num_iterations; i++) {
                     x += sin(i) * cos(i);
                 }
             }
 
-            #pragma omp section
+#pragma omp section
             {
                 for (int i = 0; i < num_iterations; i++) {
                     y += sin(i) * cos(i);
@@ -35,11 +33,11 @@ double with_false_sharing(int num_iterations) {
 double no_false_sharing(int num_iterations) {
     double x = 0.0;
     double y = 0.0;
-    #pragma omp parallel num_threads(2)
+#pragma omp parallel num_threads(2) default(none) shared(num_iterations, x, y)
     {
-        #pragma omp sections
+#pragma omp sections
         {
-            #pragma omp section
+#pragma omp section
             {
                 double private_result = 0.0;
                 for (int i = 0; i < num_iterations; i++) {
@@ -48,7 +46,7 @@ double no_false_sharing(int num_iterations) {
                 x = private_result;
             }
 
-            #pragma omp section
+#pragma omp section
             {
                 double private_result = 0.0;
                 for (int i = 0; i < num_iterations; i++) {
@@ -70,7 +68,7 @@ int main() {
         sw.start();
         auto result = with_false_sharing(num_iterations);
         sw.stop();
-        cout << "with_false_sharing: " << sw.duration().count() << " ms, result " << result << endl;
+        std::cout << "with_false_sharing: " << sw.duration().count() << " ms, result " << result << std::endl;
     }
 
     {
@@ -78,7 +76,7 @@ int main() {
         sw.start();
         auto result = no_false_sharing(num_iterations);
         sw.stop();
-        cout << "no_false_sharing: " << sw.duration().count() << " ms, result " << result << endl;
+        std::cout << "no_false_sharing: " << sw.duration().count() << " ms, result " << result << std::endl;
     }
 
     return 0;
