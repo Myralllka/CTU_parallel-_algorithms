@@ -11,26 +11,28 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 
 
 class barrier {
 private:
+    std::atomic<size_t> counter;
+    std::atomic<size_t> waiting;
+    std::atomic<size_t> thread_count;
+
     std::mutex m_m;
     std::condition_variable m_cv;
-    int counter;
-    int waiting;
-    int thread_count;
 
 public:
-    explicit barrier(int count) : thread_count(count), counter(0), waiting(0) {}
+    explicit barrier(size_t count) : thread_count(count), counter(0), waiting(0) {}
 
     void wait() {
         //fence mechanism
-        std::unique_lock<std::mutex> lk(m_m);
         ++counter;
         ++waiting;
+        std::unique_lock<std::mutex> lk(m_m);
         m_cv.wait(lk, [&] { return counter >= thread_count; });
-        m_cv.notify_one();
+        m_cv.notify_all();
         --waiting;
         if (waiting == 0) {
             counter = 0;
@@ -41,15 +43,15 @@ public:
 
 class LU {
 private:
-    int m_num_threads = std::thread::hardware_concurrency();
-//    int m_num_threads = 4;
+    size_t m_num_threads = std::thread::hardware_concurrency();
+//    size_t m_num_threads = 2;
 
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
     std::vector<std::vector<double>> m_U;
 
-    int m_size{};
-    int m_k{};
+    size_t m_size{};
+    size_t m_k{};
 
     barrier m_barrier_update_A{m_num_threads};
     barrier m_barrier_update_ready_A{m_num_threads};
@@ -67,11 +69,11 @@ public:
             throw std::invalid_argument("Cannot open the input file!");
         }
 
-        int n = 0;
+        size_t n = 0;
         bin.read((char *) &n, sizeof(size_t));
         m_A.resize(n, std::vector<double>(n, 0.0));
         m_L = m_U = m_A;
-        for (int r = 0; r < n; ++r) {
+        for (size_t r = 0; r < n; ++r) {
             bin.read((char *) m_A[r].data(), n * sizeof(double));
         }
         m_size = m_A.size();
@@ -82,15 +84,15 @@ public:
         if (bout.fail()) {
             throw std::invalid_argument("Cannot open the output file!");
         }
-        for (int i = 0; i < m_size; ++i) {
-            for (int j = i; j < m_size; ++j) {
+        for (size_t i = 0; i < m_size; ++i) {
+            for (size_t j = i; j < m_size; ++j) {
                 std::swap(m_L[j][i], m_L[i][j]);
             }
         }
-        for (int r = 0; r < m_size; ++r) {
+        for (size_t r = 0; r < m_size; ++r) {
             bout.write((char *) m_L[r].data(), m_size * sizeof(double));
         }
-        for (int r = 0; r < m_size; ++r) {
+        for (size_t r = 0; r < m_size; ++r) {
             bout.write((char *) m_U[r].data(), m_size * sizeof(double));
         }
 
@@ -100,13 +102,13 @@ public:
         for (m_k = 0; m_k < m_size; ++m_k) {
             m_U[m_k][m_k] = m_A[m_k][m_k];
             m_L[m_k][m_k] = 1;
-            for (int j = m_k + 1; j < m_size; ++j) {
+            for (size_t j = m_k + 1; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
                 m_L[m_k][j] = m_A[j][m_k] / m_U[m_k][m_k];
             }
 
-            for (int i = m_k + 1; i < m_size; ++i) {
-                for (int j = m_k + 1; j < m_size; ++j) {
+            for (size_t i = m_k + 1; i < m_size; ++i) {
+                for (size_t j = m_k + 1; j < m_size; ++j) {
                     m_A[i][j] = m_A[i][j] - m_L[m_k][i] * m_U[m_k][j];
                 }
             }
@@ -121,16 +123,17 @@ public:
 //        }
     }
 
-    [[maybe_unused]] void parallel_update_A(int idx) {
-        int k, s, tmp_size, step, begin, end;
+    [[maybe_unused]] void parallel_update_A(size_t idx) {
+        size_t k, s, step, begin, end;
         std::vector<double> v;
         v.resize(m_size);
         s = m_size;
-        for (int c = 0; c < s; ++c) {
+        for (size_t c = 0; c < s; ++c) {
             m_barrier_update_ready_A.wait();
             k = m_k;
-            tmp_size = (s - (k + 1));
-            step = tmp_size / (m_num_threads);
+
+            step = (s - (k + 1)) / (m_num_threads);
+
             begin = k + 1 + idx * step;
             end = k + 1 + (idx + 1) * step;
 
@@ -148,33 +151,31 @@ public:
         std::vector<std::thread> threads_vec;
 
         double el;
-        int tmp_size, step, begin;
+        size_t tmp_size, step, begin;
 
         threads_vec.reserve(m_num_threads - 1);
 
-        for (int i = 0; i < m_num_threads - 1; ++i) {
+        for (size_t i = 0; i < m_num_threads - 1; ++i) {
             threads_vec.emplace_back(&LU::parallel_update_A, this, i);
         }
 
         for (m_k = 0; m_k < m_size; ++m_k) {
             m_U[m_k][m_k] = m_A[m_k][m_k];
             m_L[m_k][m_k] = 1;
-            for (int j = m_k + 1; j < m_size; ++j) {
+            for (size_t j = m_k + 1; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
                 m_L[m_k][j] = m_A[j][m_k] / m_U[m_k][m_k];
             }
 
             m_barrier_update_ready_A.wait();
-//            for (int i = m_k + 1 + (m_num_threads - 1); i < m_size; i += m_num_threads) {
-
 
             tmp_size = (m_size - (m_k + 1));
             step = tmp_size / (m_num_threads);
 
             begin = m_k + 1 + (m_num_threads - 1) * step;
-            for (int i = begin; i < m_size; ++i) {
+            for (size_t i = begin; i < m_size; ++i) {
                 el = m_L[m_k][i];
-                for (int j = 0; j < m_size; ++j) {
+                for (size_t j = 0; j < m_size; ++j) {
                     m_A[i][j] -= el * m_U[m_k][j];
                 }
             }
@@ -193,9 +194,9 @@ std::ostream &operator<<(std::ostream &out, const LU &lu) {
     std::function<void(const std::vector<std::vector<double>> &)> print_matrix = [&](
             const std::vector<std::vector<double>> &M) {
 
-        int n = M.size();
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < n; ++j) {
+        size_t n = M.size();
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = 0; j < n; ++j) {
                 out << " " << std::setw(10) << M[i][j];
             }
             out << std::endl;
@@ -205,9 +206,9 @@ std::ostream &operator<<(std::ostream &out, const LU &lu) {
     std::function<void(const std::vector<std::vector<double>> &)> print_matrix_L = [&](
             const std::vector<std::vector<double>> &M) {
 
-        int n = M.size();
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < n; ++j) {
+        size_t n = M.size();
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = 0; j < n; ++j) {
                 out << " " << std::setw(10) << M[j][i];
             }
             out << std::endl;
