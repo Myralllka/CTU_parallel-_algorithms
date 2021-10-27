@@ -20,8 +20,8 @@ int main(int argc, char *argv[]) {
     std::default_random_engine gen(rd());
     std::uniform_real_distribution<double> val(1.0, 10.0);
     std::vector<std::vector<double>> A(n, std::vector<double>(n));
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < n; ++j) {
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
             A[i][j] = val(gen);
         }
     }

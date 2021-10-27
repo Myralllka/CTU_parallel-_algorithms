@@ -23,24 +23,24 @@ int main(int argc, char *argv[]) {
         throw std::invalid_argument("Cannot open the input file!");
     }
 
-    size_t n = atoi(argv[1]);
+    int n = atoi(argv[1]);
 //    bin.read((char *) &n, sizeof(size_t));
     std::vector<std::vector<double>> U, L;
     U.resize(n, std::vector<double>(n, 0.0));
     L.resize(n, std::vector<double>(n, 0.0));
-    for (size_t r = 0; r < n; ++r) {
+    for (int r = 0; r < n; ++r) {
         bin.read((char *) L[r].data(), n * sizeof(double));
     }
-    for (size_t r = 0; r < n; ++r) {
+    for (int r = 0; r < n; ++r) {
         bin.read((char *) U[r].data(), n * sizeof(double));
     }
 
     std::function<void(const std::vector<std::vector<double>> &)> print_matrix = [&](
             const std::vector<std::vector<double>> &M) {
 
-        size_t n = M.size();
-        for (size_t i = 0; i < n; ++i) {
-            for (size_t j = 0; j < n; ++j) {
+        int n = M.size();
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
                 std::cout << " " << std::setw(10) << M[i][j];
             }
             std::cout << std::endl;
