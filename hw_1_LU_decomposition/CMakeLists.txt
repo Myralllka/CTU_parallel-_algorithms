@@ -5,7 +5,7 @@ project(${PROJECT_NAME} CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-#set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 
 # Options
 set(WARNINGS_AS_ERRORS ON)

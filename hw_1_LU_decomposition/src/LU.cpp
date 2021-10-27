@@ -12,7 +12,6 @@
 #include <mutex>
 #include <condition_variable>
 
-#define TRANSPOSE_L
 
 class barrier {
 private:
@@ -26,6 +25,7 @@ public:
     explicit barrier(size_t count) : thread_count(count), counter(0), waiting(0) {}
 
     void wait() {
+        //fence mechanism
         std::unique_lock<std::mutex> lk(m_m);
         ++counter;
         ++waiting;
@@ -46,9 +46,6 @@ private:
     std::vector<std::vector<double>> m_A;
     std::vector<std::vector<double>> m_L;
     std::vector<std::vector<double>> m_U;
-#ifdef TRANSPOSE_L
-    std::vector<std::vector<double>> m_L_T;
-#endif
     std::vector<size_t> m_threads_indexes;
 
     size_t m_size{};
@@ -56,7 +53,6 @@ private:
 
     barrier m_barrier_update_A{m_num_threads};
     barrier m_barrier_update_ready_A{m_num_threads};
-
 
     friend std::ostream &operator<<(std::ostream &, const LU &);
 
@@ -76,11 +72,7 @@ public:
         size_t n = 0;
         bin.read((char *) &n, sizeof(size_t));
         m_A.resize(n, std::vector<double>(n, 0.0));
-#ifdef TRANSPOSE_L
-        m_L_T = m_L = m_U = m_A;
-#else
         m_L = m_U = m_A;
-#endif
         for (size_t r = 0; r < n; ++r) {
             bin.read((char *) m_A[r].data(), n * sizeof(double));
         }
@@ -92,19 +84,13 @@ public:
         if (bout.fail()) {
             throw std::invalid_argument("Cannot open the output file!");
         }
-#ifdef TRANSPOSE_L
         for (size_t i = 0; i < m_size; ++i) {
-            for (size_t j = 0; j < m_size; ++j) {
-                m_L_T[j][i] = m_L[i][j];
+            for (size_t j = i; j < m_size; ++j) {
+                std::swap(m_L[j][i], m_L[i][j]);
             }
         }
-#endif
         for (size_t r = 0; r < m_size; ++r) {
-#ifdef TRANSPOSE_L
-            bout.write((char *) m_L_T[r].data(), m_size * sizeof(double));
-#else
             bout.write((char *) m_L[r].data(), m_size * sizeof(double));
-#endif
         }
         for (size_t r = 0; r < m_size; ++r) {
             bout.write((char *) m_U[r].data(), m_size * sizeof(double));
@@ -118,100 +104,32 @@ public:
             m_L[m_k][m_k] = 1;
             for (size_t j = m_k + 1; j < m_size; ++j) {
                 m_U[m_k][j] = m_A[m_k][j];
-#ifdef TRANSPOSE_L
                 m_L[m_k][j] = m_A[j][m_k] / m_U[m_k][m_k];
-#else
-                m_L[j][m_k] = m_A[j][m_k] / m_U[m_k][m_k];
-#endif
             }
 
             for (size_t i = m_k + 1; i < m_size; ++i) {
                 for (size_t j = m_k + 1; j < m_size; ++j) {
-#ifdef TRANSPOSE_L
-                    m_A[i][j] -= m_L[m_k][i] * m_U[m_k][j];
-#else
-                    m_A[i][j] = m_A[i][j] - m_L[i][m_k] * m_U[m_k][j];
-#endif
+                    m_A[i][j] = m_A[i][j] - m_L[m_k][i] * m_U[m_k][j];
+
                 }
             }
         }
     }
 
     void decompose() {
-        if (m_num_threads >= m_A.size()) {
-            decompose_linear();
-        } else {
-            decompose_parallel();
-        }
+//        if (m_num_threads * 2 >= m_A.size()) {
+        decompose_linear();
+//        } else {
+//            decompose_parallel();
+//        }
     }
 
     [[maybe_unused]] void parallel_update_A(size_t idx) {
-        for (size_t cnt = 0; cnt < m_size; ++cnt) {
-            m_barrier_update_ready_A.wait();
 
-            for (size_t i = m_threads_indexes[idx]; i < m_threads_indexes[idx + 1]; ++i) {
-                for (size_t j = 0; j < m_size; ++j) {
-#ifdef TRANSPOSE_L
-                    m_A[i][j] -= m_L[m_k][i] * m_U[m_k][j];
-#else
-                    m_A[i][j] -= m_L[i][m_k] * m_U[m_k][j];
-#endif
-                }
-            }
-
-            m_barrier_update_A.wait();
-        }
     }
 
     [[maybe_unused]] void decompose_parallel() {
-        m_threads_indexes[m_num_threads] = m_size;
 
-        std::vector<std::thread> vector_of_threads;
-
-        double m_U_m_k;
-        size_t tmp_size, step;
-        for (size_t i = 0; i < m_num_threads - 1; ++i) {
-            vector_of_threads.emplace_back(&LU::parallel_update_A, this, i);
-        }
-
-        for (m_k = 0; m_k < m_size; ++m_k) {
-            m_U_m_k = m_A[m_k][m_k];
-            m_U[m_k][m_k] = m_U_m_k;
-            m_L[m_k][m_k] = 1;
-            for (size_t j = m_k + 1; j < m_size; ++j) {
-                m_U[m_k][j] = m_A[m_k][j];
-#ifdef TRANSPOSE_L
-                m_L[m_k][j] = m_A[j][m_k] / m_U_m_k;
-#else
-                m_L[j][m_k] = m_A[j][m_k] / m_U[m_k][m_k];
-#endif
-            }
-
-            {
-                tmp_size = (m_size - (m_k + 1));
-                step = tmp_size / (m_num_threads);
-
-                for (size_t counter = 0; counter < m_num_threads; ++counter) {
-                    m_threads_indexes[counter] = m_k + 1 + counter * step;
-                }
-
-                m_barrier_update_ready_A.wait();
-//                for (size_t i = m_threads_indexes.end()[-2]; i < m_threads_indexes.end()[-1]; ++i) {
-//                    for (size_t j = 0; j < m_size; ++j) {
-//#ifdef TRANSPOSE_L
-//                        m_A[i][j] -= m_L[m_k][i] * m_U[m_k][j];
-//#else
-//                        m_A[i][j] -= m_L[i][m_k] * m_U[m_k][j];
-//#endif
-//                    }
-//                }
-                m_barrier_update_A.wait();
-            }
-        }
-
-        for (auto &t: vector_of_threads) {
-            t.join();
-        }
     }
 };
 
@@ -245,11 +163,7 @@ std::ostream &operator<<(std::ostream &out, const LU &lu) {
     out << "Matrix A:" << std::endl;
     print_matrix(lu.m_A);
     out << std::endl << "Lower matrix:" << std::endl;
-#ifdef TRANSPOSE_L
     print_matrix_L(lu.m_L);
-#else
-    print_matrix(lu.m_L);
-#endif
     out << std::endl << "Upper matrix:" << std::endl;
     print_matrix(lu.m_U);
 
