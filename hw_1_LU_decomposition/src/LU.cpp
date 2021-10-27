@@ -116,11 +116,11 @@ public:
     }
 
     void decompose() {
-//        if (m_num_threads >= m_A.size()) {
-//            decompose_linear();
-//        } else {
-        decompose_parallel();
-//        }
+        if (m_num_threads >= m_A.size()) {
+            decompose_linear();
+        } else {
+            decompose_parallel();
+        }
     }
 
     [[maybe_unused]] void parallel_update_A(size_t idx) {
