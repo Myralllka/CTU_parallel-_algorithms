@@ -18,7 +18,7 @@ set(ENABLE_SANITIZERS OFF)
 
 #! Build release version if not specified otherwise.
 if (NOT CMAKE_BUILD_TYPE)
-	set(CMAKE_BUILD_TYPE Release)
+    set(CMAKE_BUILD_TYPE Release)
 endif ()
 
 # Set output directories
@@ -28,16 +28,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin)
 include_directories(include)
 
 # Project source compilation
-add_executable(${PROJECT_NAME} src/LU.cpp src/main.c include/LU.h)
-add_executable(read_bin_mat src/read_bin_matrix.cpp)
-
+add_executable(${PROJECT_NAME} src/main.cpp src/LU.cpp)
+#add_executable(read_bin_mat src/read_bin_matrix.cpp)
 
 #if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast -march=native")
 #endif()
 
-add_executable(InstanceGenerator src/InstanceGenerator.cpp)
-target_link_libraries(InstanceGenerator ${CMAKE_THREAD_LIBS_INIT} )
+add_executable(InstanceGenerator src/InstanceGenerator.cpp include/barrier.hpp)
+target_link_libraries(InstanceGenerator ${CMAKE_THREAD_LIBS_INIT})
 
 #
 find_package(Threads)
@@ -49,12 +48,12 @@ target_link_libraries(${PROJECT_NAME} Boost::program_options ${CMAKE_THREAD_LIBS
 
 # set output directory (bin)
 set_target_properties(${PROJECT_NAME}
-						PROPERTIES
-						RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
 #####################################
 # Define ALL_TARGETS variable to use in PVS and Sanitizers
-set (ALL_TARGETS ${PROJECT_NAME})
+set(ALL_TARGETS ${PROJECT_NAME})
 
 # Include fixed CMake configuration
 include(cmake/config.cmake)
