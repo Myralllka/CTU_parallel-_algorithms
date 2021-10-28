@@ -2,17 +2,15 @@
 
 #include "Utils.h"
 
-using namespace std;
-
 int main(int argc, char *argv[]) {
-    auto programArguments = ProgramArguments::Parse(argc, argv);
+    auto program_arguments = Program_arguments::Parse(argc, argv);
 
     // The input records, e.g., records[0] is the first record in the input file.
-    vector<vector<int>> records = readRecords(programArguments.mInputFilePath);
+    std::vector<std::vector<int>> records = read_records(program_arguments.m_input_file_path);
 
-    // TODO: fill the treeCost variable with the MST of the records' edit distances graph.
-    int treeCost = 0;
+    // TODO: fill the tree_cost variable with the MST of the records' edit distances graph.
+    int tree_cost = 0;
 
-    cout << treeCost << endl;
-    writeCost(treeCost, programArguments.mOutputFilePath);
+    std::cout << tree_cost << std::endl;
+    write_cost(tree_cost, program_arguments.m_output_file_path);
 }

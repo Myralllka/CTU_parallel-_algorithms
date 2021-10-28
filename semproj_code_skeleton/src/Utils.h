@@ -2,41 +2,42 @@
 #define STORAGE_UTILS_H
 
 #include <fstream>
+#include <utility>
 #include <vector>
 #include <string>
 #include <iostream>
 #include <chrono>
 
-using namespace std;
+
 using namespace std::chrono;
 
-void writeRecords(const vector<vector<int>> &records, string filePath) {
-    ofstream bout(filePath.c_str(), ofstream::out | ofstream::binary | ofstream::trunc);
+void write_records(const std::vector<std::vector<int>> &records, const std::string &file_path) {
+    std::ofstream bout(file_path.c_str(), std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
-    int numRecords = records.size();
-    bout.write((char *)&numRecords, sizeof(int));
+    int num_records = records.size();
+    bout.write((char *) &num_records, sizeof(int));
 
-    for (auto &record : records) {
-        int recordLen = record.size();
-        bout.write((char *)&recordLen, sizeof(int));
-        bout.write((char *)record.data(), record.size() * sizeof(int));
+    for (auto &record: records) {
+        int record_len = static_cast<int>(record.size());
+        bout.write((char *) &record_len, sizeof(int));
+        bout.write((char *) record.data(), record.size() * sizeof(int));
     }
 }
 
-vector<vector<int>> readRecords(string filePath) {
-    ifstream bin(filePath.c_str(), ifstream::in | ofstream::binary);
+std::vector<std::vector<int>> read_records(const std::string &file_path) {
+    std::ifstream bin(file_path.c_str(), std::ifstream::in | std::ofstream::binary);
 
-    int numRecords = 0;
-    bin.read((char*)&numRecords, sizeof(int));
+    int num_records = 0;
+    bin.read((char *) &num_records, sizeof(int));
 
-    vector<vector<int>> records;
+    std::vector<std::vector<int>> records;
 
-    for (auto i = 0; i < numRecords; i++) {
-        int recordLen = 0;
-        bin.read((char*)&recordLen, sizeof(int));
+    for (auto i = 0; i < num_records; i++) {
+        int record_len = 0;
+        bin.read((char *) &record_len, sizeof(int));
 
-        vector<int> record(recordLen, 0);
-        bin.read((char*)record.data(), recordLen * sizeof(int));
+        std::vector<int> record(record_len, 0);
+        bin.read((char *) record.data(), record_len * sizeof(int));
 
         records.push_back(record);
     }
@@ -44,61 +45,60 @@ vector<vector<int>> readRecords(string filePath) {
     return records;
 }
 
-void printRecords(const vector<vector<int>> &records) {
-    for (auto &record : records) {
-        for (auto &value : record) {
-            cout << value << " ";
+void print_records(const std::vector<std::vector<int>> &records) {
+    for (auto &record: records) {
+        for (auto &value: record) {
+            std::cout << value << " ";
         }
 
-        cout << endl;
+        std::cout << std::endl;
     }
 }
 
-void writeCost(int cost, string filePath) {
-    ofstream bout(filePath.c_str(), ofstream::out | ofstream::binary | ofstream::trunc);
+void write_cost(int cost, const std::string& file_path) {
+    std::ofstream bout(file_path.c_str(), std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
-    bout.write((char *)&cost, sizeof(int));
+    bout.write((char *) &cost, sizeof(int));
 }
 
 class Stopwatch {
 private:
-    time_point<steady_clock> mStart;
-    time_point<steady_clock> mEnd;
-    bool mRunning;
+    time_point<steady_clock> m_start;
+    time_point<steady_clock> m_end;
+    bool m_running;
 
 public:
-    Stopwatch() : mRunning(false) {}
+    Stopwatch() : m_running(false) {}
 
-    void start() {
-        mStart = steady_clock::now();
-        mRunning = true;
+    [[maybe_unused]] void start() {
+        m_start = steady_clock::now();
+        m_running = true;
     }
 
-    void stop() {
-        mEnd = steady_clock::now();
-        mRunning = false;
+    [[maybe_unused]] void stop() {
+        m_end = steady_clock::now();
+        m_running = false;
     }
 
-    milliseconds duration() const {
-        auto end = mRunning ? steady_clock::now() : mEnd;
-        return duration_cast<milliseconds>(end - mStart);
+    [[maybe_unused]] [[nodiscard]] milliseconds duration() const {
+        auto end = m_running ? steady_clock::now() : m_end;
+        return duration_cast<milliseconds>(end - m_start);
     }
 };
 
-class ProgramArguments {
+class Program_arguments {
 private:
-    ProgramArguments(const string inputFilePath, const string outputFilePath)
-        : mInputFilePath(inputFilePath), mOutputFilePath(outputFilePath)
-    {
+    Program_arguments(std::string input_file_path, std::string output_file_path)
+            : m_input_file_path(std::move(input_file_path)), m_output_file_path(std::move(output_file_path)) {
 
     }
 
 public:
-    string mInputFilePath;
-    string mOutputFilePath;
+    std::string m_input_file_path;
+    std::string m_output_file_path;
 
-    static ProgramArguments Parse(int argc, char *argv[]) {
-        return ProgramArguments(argv[1], argv[2]);
+    static Program_arguments Parse(int argc, char *argv[]) {
+        return Program_arguments{argv[1], argv[2]};
     }
 };
 

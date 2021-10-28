@@ -5,19 +5,18 @@
 
 #include "Utils.h"
 
-using namespace std;
-
 // Generates the records completely on random.
-vector<vector<int>> randomRecords(mt19937 randGen, int numRecords, int maxRecordLen) {
-    uniform_int_distribution<int> distRecordLen(1, maxRecordLen);
-    uniform_int_distribution<int> distValues(1, 5);
+std::vector<std::vector<int>> random_records(std::mt19937 rand_gen, int num_records, int max_record_len) {
+    std::uniform_int_distribution<int> dist_record_len(1, max_record_len);
+    std::uniform_int_distribution<int> dist_values(1, 5);
 
-    vector<vector<int>> records;
-    for (auto i = 0; i < numRecords; i++) {
-        auto recordLen = distRecordLen(randGen);
-        vector<int> record;
-        for (auto j = 0; j < recordLen; j++) {
-            record.push_back(distValues(randGen));
+    std::vector<std::vector<int>> records;
+    for (auto i = 0; i < num_records; i++) {
+        auto record_len = dist_record_len(rand_gen);
+        std::vector<int> record;
+        record.reserve(record_len);
+        for (auto j = 0; j < record_len; j++) {
+            record.push_back(dist_values(rand_gen));
         }
         records.push_back(record);
     }
@@ -26,13 +25,13 @@ vector<vector<int>> randomRecords(mt19937 randGen, int numRecords, int maxRecord
 }
 
 int main(int argc, char *argv[]) {
-    int numRecords = stoi(argv[1]);
-    int maxRecordLen = stoi(argv[2]);
-    string filePath = argv[3];
+    int num_records = std::stoi(argv[1]);
+    int max_record_len = std::stoi(argv[2]);
+    std::string file_path = argv[3];
 
-    random_device randomDevice;
-    mt19937 randGen(randomDevice());
+    std::random_device random_device;
+    std::mt19937 rand_gen(random_device());
 
-    auto records = randomRecords(randGen, numRecords, maxRecordLen);
-    writeRecords(records, filePath);
+    auto records = random_records(rand_gen, num_records, max_record_len);
+    write_records(records, file_path);
 }
