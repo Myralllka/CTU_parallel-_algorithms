@@ -10,35 +10,35 @@
 
 // Spot with permanent temperature on coordinates [x,y].
 struct Spot {
-    int mX;
-    int mY;
-    float mTemperature;
+    int m_x;
+    int m_y;
+    float m_temperature;
 
     bool operator==(const Spot &b) const {
-        return (mX == b.mX) && (mY == b.mY);
+        return (m_x == b.m_x) && (m_y == b.m_y);
     }
 };
 
-std::tuple<int, int, std::vector<Spot>> readInstance(std::string instanceFileName) {
+std::tuple<int, int, std::vector<Spot>> read_instance(std::string instance_file_name) {
     int width, height;
     std::vector<Spot> spots;
     std::string line;
 
-    std::ifstream file(instanceFileName);
+    std::ifstream file(instance_file_name);
     if (file.is_open()) {
-        int lineId = 0;
+        int line_id = 0;
         while (std::getline(file, line)) {
             std::stringstream ss(line);
-            if (lineId == 0) {
+            if (line_id == 0) {
                 ss >> width;
-            } else if (lineId == 1) {
+            } else if (line_id == 1) {
                 ss >> height;
             } else {
                 int i, j, temperature;
                 ss >> i >> j >> temperature;
                 spots.push_back({i, j, (float) temperature});
             }
-            lineId++;
+            line_id++;
         }
         file.close();
     } else {
@@ -47,16 +47,16 @@ std::tuple<int, int, std::vector<Spot>> readInstance(std::string instanceFileNam
     return make_tuple(width, height, spots);
 }
 
-void writeOutput(
-        const int myRank,
+void write_output(
+        const int my_rank,
         const int width,
         const int height,
-        const std::string outputFileName,
+        const std::string output_file_name,
         const std::vector<float> &temperatures) {
     // Draw the output image in Netpbm format.
-    std::ofstream file(outputFileName);
+    std::ofstream file(output_file_name);
     if (file.is_open()) {
-        if (myRank == 0) {
+        if (my_rank == 0) {
             file << "P2\n" << width << "\n" << height << "\n" << 255 << "\n";
             for (auto temperature: temperatures) {
                 file << (int) std::max(std::min(temperature, 255.0f), 0.0f) << " ";
@@ -65,7 +65,7 @@ void writeOutput(
     }
 }
 
-void printHelpPage(char *program) {
+void print_help_page(char *program) {
     std::cout << "Simulates a simple heat diffusion." << std::endl;
     std::cout << std::endl << "Usage:" << std::endl;
     std::cout << "\t" << program << " INPUT_PATH OUTPUT_PATH" << std::endl << std::endl;
@@ -74,19 +74,19 @@ void printHelpPage(char *program) {
 int main(int argc, char **argv) {
     // Initialize MPI
     MPI_Init(&argc, &argv);
-    int worldSize, myRank;
-    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
-    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+    int world_size, my_rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     if (argc == 1) {
-        if (myRank == 0) {
-            printHelpPage(argv[0]);
+        if (my_rank == 0) {
+            print_help_page(argv[0]);
         }
         MPI_Finalize();
         exit(0);
     } else if (argc != 3) {
-        if (myRank == 0) {
-            printHelpPage(argv[0]);
+        if (my_rank == 0) {
+            print_help_page(argv[0]);
         }
         MPI_Finalize();
         exit(1);
@@ -95,8 +95,8 @@ int main(int argc, char **argv) {
     // Read the input instance.
     int width, height;  // Width and height of the matrix.
     std::vector<Spot> spots; // Spots with permanent temperature.
-    if (myRank == 0) {
-        tie(width, height, spots) = readInstance(argv[1]);
+    if (my_rank == 0) {
+        tie(width, height, spots) = read_instance(argv[1]);
     }
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
@@ -114,13 +114,13 @@ int main(int argc, char **argv) {
 
     //-----------------------\\
 
-    double totalDuration = std::chrono::duration_cast<std::chrono::duration<double>>(
+    double total_duration = std::chrono::duration_cast<std::chrono::duration<double>>(
             std::chrono::high_resolution_clock::now() - start).count();
-    std::cout << "computational time: " << totalDuration << " s" << std::endl;
+    std::cout << "computational time: " << total_duration << " s" << std::endl;
 
-    if (myRank == 0) {
-        std::string outputFileName(argv[2]);
-        writeOutput(myRank, width, height, outputFileName, temperatures);
+    if (my_rank == 0) {
+        std::string output_file_name(argv[2]);
+        write_output(my_rank, width, height, output_file_name, temperatures);
     }
 
     MPI_Finalize();
