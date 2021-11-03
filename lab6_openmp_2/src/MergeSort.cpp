@@ -27,15 +27,13 @@ void merge_sort_parallel_impl(std::vector<double> &input_vector, ssize_t begin, 
     ssize_t middle = (end + begin) / 2;
 
     if (end - begin < 32) {
-
-        merge_sort(input_vector, begin, end);
-
+        std::sort(input_vector.begin() + begin, input_vector.begin() + end);
     } else {
 #pragma omp taskgroup
         {
-#pragma omp task default(none) shared(input_vector) firstprivate(begin, middle, end)
+#pragma omp task default(none) shared(input_vector) firstprivate(begin, middle)
             merge_sort_parallel_impl(input_vector, begin, middle);
-#pragma omp task default(none) shared(input_vector) firstprivate(begin, middle, end)
+#pragma omp task default(none) shared(input_vector) firstprivate(middle, end)
             merge_sort_parallel_impl(input_vector, middle, end);
         }
 

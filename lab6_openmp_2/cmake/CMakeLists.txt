@@ -13,5 +13,6 @@ if (OPENMP_FOUND)
 endif()
 
 add_executable(FalseSharing ../src/FalseSharing.cpp)
+add_executable(merge_solved ../src/merge_solved.cpp)
 add_executable(VectorNormalization ../src/VectorNormalization.cpp)
 add_executable(MergeSort ../src/MergeSort.cpp)
